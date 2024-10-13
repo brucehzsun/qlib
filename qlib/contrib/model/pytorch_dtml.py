@@ -43,6 +43,7 @@ class DTML(Model):
         early_stop=20,
         loss="mse",
         optimizer="adam",
+        reg=1e-3,
         GPU=0,
         seed=None,
     ):
@@ -56,6 +57,7 @@ class DTML(Model):
 
         self.n_epochs = n_epochs
         self.lr = lr
+        self.reg = reg
         self.metric = metric
         self.batch_size = batch_size
         self.early_stop = early_stop
@@ -240,7 +242,7 @@ class DTML(Model):
         if self.use_gpu:
             torch.cuda.empty_cache()
 
-    def predict(self, dataset: Dataset, segment: Text | slice = "test") -> object:
+    def predict(self, dataset: Dataset, segment: Union[Text, slice] = "test") -> object:
         if not self.fitted:
             raise ValueError("model is not fitted yet!")
 
@@ -326,7 +328,7 @@ class DTMLModel(nn.Module):
     def __init__(
         self, input_size, hidden_size, num_layers, n_heads, beta=0.1, drop_rate=0.1
     ):
-        super.__init__()
+        super().__init__()
         self.beta = beta
         self.txattention = TimeAxisAttention(input_size, hidden_size, num_layers)
         self.dxattention = DataAxisAttention(hidden_size, n_heads, drop_rate)
