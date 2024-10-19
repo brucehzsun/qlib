@@ -22,8 +22,10 @@ import torch.optim as optim
 
 from .pytorch_utils import count_parameters
 from ...model.base import Model
-from ...data.dataset import DatasetH
+from ...data.dataset import TSDatasetH
 from ...data.dataset.handler import DataHandlerLP
+from torch.utils.data import DataLoader
+from ...model.utils import ConcatDataset
 
 
 class DTML(Model):
@@ -71,7 +73,8 @@ class DTML(Model):
         )
 
         self.logger.info("model:\n{:}".format(self.model))
-        self.logger.info("model size: {:.4f} MB".format(count_parameters(self.model)))
+        self.logger.info("model size: {:.4f} MB".format(
+            count_parameters(self.model)))
 
         if optimizer.lower() == "adam":
             self.train_optimizer = optim.Adam(
@@ -93,15 +96,18 @@ class DTML(Model):
     def use_gpu(self):
         return self.device != torch.device("cpu")
 
-    def mse(self, pred, label):
-        loss = (pred - label) ** 2
+    def mse(self, pred, label, weight):
+        loss = weight * (pred - label) ** 2
         return torch.mean(loss)
 
-    def loss_fn(self, pred, label):
+    def loss_fn(self, pred, label, weight=None):
         mask = ~torch.isnan(label)
 
+        if weight is None:
+            weight = torch.ones_like(label)
+
         if self.loss == "mse":
-            return self.mse(pred[mask], label[mask])
+            return self.mse(pred[mask], label[mask], weight[mask])
 
         raise ValueError("unknown loss `%s`" % self.loss)
 
@@ -110,71 +116,42 @@ class DTML(Model):
 
         if self.metric in ("", "loss"):
             return -self.loss_fn(pred[mask], label[mask])
+        elif self.metric == "mse":
+            mask = ~torch.isnan(label)
+            weight = torch.ones_like(label)
+            return -self.mse(pred[mask], label[mask], weight[mask])
 
         raise ValueError("unknown metric `%s`" % self.metric)
 
-    def train_epoch(self, x_train, y_train):
-        x_train_values = x_train.values
-        y_train_values = np.squeeze(y_train.values)
-
+    def train_epoch(self, data_loader):
         self.model.train()
 
-        indices = np.arange(len(x_train_values))
-        np.random.shuffle(indices)
+        for data, weight in data_loader:
+            feature = data[:, :, 0:-1].to(self.device)
+            label = data[:, -1, -1].to(self.device)
 
-        for i in range(len(indices))[:: self.batch_size]:
-            if len(indices) - i < self.batch_size:
-                break
-
-            feature = (
-                torch.from_numpy(x_train_values[indices[i : i + self.batch_size]])
-                .float()
-                .to(self.device)
-            )
-            label = (
-                torch.from_numpy(y_train_values[indices[i : i + self.batch_size]])
-                .float()
-                .to(self.device)
-            )
-
-            pred = self.model(feature)
-            loss = self.loss_fn(pred, label)
+            pred = self.model(feature.float())
+            loss = self.loss_fn(pred, label, weight.to(self.device))
 
             self.train_optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
             self.train_optimizer.step()
 
-    def test_epoch(self, data_x, data_y):
-        # prepare training data
-        x_values = data_x.values
-        y_values = np.squeeze(data_y.values)
-
+    def test_epoch(self, data_loader):
         self.model.eval()
 
         scores = []
         losses = []
 
-        indices = np.arange(len(x_values))
-
-        for i in range(len(indices))[:: self.batch_size]:
-            if len(indices) - i < self.batch_size:
-                break
-
-            feature = (
-                torch.from_numpy(x_values[indices[i : i + self.batch_size]])
-                .float()
-                .to(self.device)
-            )
-            label = (
-                torch.from_numpy(y_values[indices[i : i + self.batch_size]])
-                .float()
-                .to(self.device)
-            )
+        for data, weight in data_loader:
+            feature = data[:, :, 0:-1].to(self.device)
+            # feature[torch.isnan(feature)] = 0
+            label = data[:, -1, -1].to(self.device)
 
             with torch.no_grad():
-                pred = self.model(feature)
-                loss = self.loss_fn(pred, label)
+                pred = self.model(feature.float())
+                loss = self.loss_fn(pred, label, weight.to(self.device))
                 losses.append(loss.item())
 
                 score = self.metric_fn(pred, label)
@@ -184,24 +161,50 @@ class DTML(Model):
 
     def fit(
         self,
-        dataset: DatasetH,
+        dataset: TSDatasetH,
         evals_result=dict(),
         save_path=None,
+        reweighter=None,
     ):
-        df_train, df_valid, df_test = dataset.prepare(
-            ["train", "valid", "test"],
-            col_set=["feature", "label"],
-            data_key=DataHandlerLP.DK_L,
-        )
-        if df_train.empty or df_valid.empty:
+        dl_train = dataset.prepare(
+            "train", col_set=["feature", "label"], data_key=DataHandlerLP.DK_L)
+        dl_valid = dataset.prepare(
+            "valid", col_set=["feature", "label"], data_key=DataHandlerLP.DK_L)
+        if dl_train.empty or dl_valid.empty:
             raise ValueError(
-                "Empty data from dataset, please check your dataset config."
-            )
+                "Empty data from dataset, please check your dataset config.")
 
-        x_train, y_train = df_train["feature"], df_train["label"]
-        x_valid, y_valid = df_valid["feature"], df_valid["label"]
+        # process nan brought by dataloader
+        dl_train.config(fillna_type="ffill+bfill")
+        # process nan brought by dataloader
+        dl_valid.config(fillna_type="ffill+bfill")
+
+        if reweighter is None:
+            wl_train = np.ones(len(dl_train))
+            wl_valid = np.ones(len(dl_valid))
+        elif isinstance(reweighter, Reweighter):
+            wl_train = reweighter.reweight(dl_train)
+            wl_valid = reweighter.reweight(dl_valid)
+        else:
+            raise ValueError("Unsupported reweighter type.")
+
+        train_loader = DataLoader(
+            ConcatDataset(dl_train, wl_train),
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=20,
+            drop_last=True,
+        )
+        valid_loader = DataLoader(
+            ConcatDataset(dl_valid, wl_valid),
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=20,
+            drop_last=True,
+        )
 
         save_path = get_or_create_path(save_path)
+
         stop_steps = 0
         train_loss = 0
         best_score = -np.inf
@@ -216,11 +219,12 @@ class DTML(Model):
         for step in range(self.n_epochs):
             self.logger.info("Epoch%d:", step)
             self.logger.info("training...")
-            self.train_epoch(x_train, y_train)
+            self.train_epoch(train_loader)
             self.logger.info("evaluating...")
-            train_loss, train_score = self.test_epoch(x_train, y_train)
-            val_loss, val_score = self.test_epoch(x_valid, y_valid)
-            self.logger.info("train %.6f, valid %.6f" % (train_score, val_score))
+            train_loss, train_score = self.test_epoch(train_loader)
+            val_loss, val_score = self.test_epoch(valid_loader)
+            self.logger.info("train %.6f, valid %.6f" %
+                             (train_score, val_score))
             evals_result["train"].append(train_score)
             evals_result["valid"].append(val_score)
 
@@ -242,33 +246,27 @@ class DTML(Model):
         if self.use_gpu:
             torch.cuda.empty_cache()
 
-    def predict(self, dataset: Dataset, segment: Union[Text, slice] = "test") -> object:
+    def predict(self, dataset: TSDatasetH, segment: Union[Text, slice] = "test"):
         if not self.fitted:
             raise ValueError("model is not fitted yet!")
 
-        x_test = dataset.prepare(
-            segment, col_set="feature", data_key=DataHandlerLP.DK_I
-        )
-        index = x_test.index
+        dl_test = dataset.prepare(
+            segment, col_set=["feature", "label"], data_key=DataHandlerLP.DK_I)
+        dl_test.config(fillna_type="ffill+bfill")
+        test_loader = DataLoader(
+            dl_test, batch_size=self.batch_size, num_workers=self.n_jobs)
         self.model.eval()
-        x_values = x_test.values
-        sample_num = x_values.shape[0]
         preds = []
 
-        for begin in range(sample_num)[:: self.batch_size]:
-            if sample_num - begin < self.batch_size:
-                end = sample_num
-            else:
-                end = begin + self.batch_size
-
-            x_batch = torch.from_numpy(x_values[begin:end]).float().to(self.device)
+        for data in test_loader:
+            feature = data[:, :, 0:-1].to(self.device)
 
             with torch.no_grad():
-                pred = self.model(x_batch).detach().cpu().numpy()
+                pred = self.model(feature.float()).detach().cpu().numpy()
 
             preds.append(pred)
 
-        return pd.Series(np.concatenate(preds), index=index)
+        return pd.Series(np.concatenate(preds), index=dl_test.get_index())
 
 
 class TimeAxisAttention(nn.Module):
@@ -284,7 +282,8 @@ class TimeAxisAttention(nn.Module):
         o, (h, _) = self.lstm(x)  # o: (D, W, H) / h: (1, D, H)
         score = torch.bmm(o, h.permute(1, 2, 0))  # (D, W, H) x (D, H, 1)
         tx_attn = torch.softmax(score, 1).squeeze(-1)  # (D, W)
-        context = torch.bmm(tx_attn.unsqueeze(1), o).squeeze(1)  # (D, 1, W) x (D, W, H)
+        context = torch.bmm(tx_attn.unsqueeze(1), o).squeeze(
+            1)  # (D, 1, W) x (D, W, H)
         normed_context = self.lnorm(context)
         if rt_attn:
             return normed_context, tx_attn
@@ -295,7 +294,8 @@ class TimeAxisAttention(nn.Module):
 class DataAxisAttention(nn.Module):
     def __init__(self, hidden_size, n_heads, drop_rate=0.1):
         super().__init__()
-        self.multi_attn = nn.MultiheadAttention(hidden_size, n_heads, batch_first=True)
+        self.multi_attn = nn.MultiheadAttention(
+            hidden_size, n_heads, batch_first=True)
         self.mlp = nn.Sequential(
             nn.Linear(hidden_size, 4 * hidden_size),
             nn.ReLU(),
@@ -330,7 +330,8 @@ class DTMLModel(nn.Module):
     ):
         super().__init__()
         self.beta = beta
-        self.txattention = TimeAxisAttention(input_size, hidden_size, num_layers)
+        self.txattention = TimeAxisAttention(
+            input_size, hidden_size, num_layers)
         self.dxattention = DataAxisAttention(hidden_size, n_heads, drop_rate)
         self.linear = nn.Linear(hidden_size, 1)
 
