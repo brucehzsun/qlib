@@ -136,7 +136,9 @@ class Alpha158DL(QlibDataLoader):
             fields += ["Ref($volume, %d)/($volume+1e-12)" % d if d != 0 else "$volume/($volume+1e-12)" for d in windows]
             names += ["VOLUME" + str(d) for d in windows]
         if "rolling" in config:
-            windows = config["rolling"].get("windows", [5, 10, 20, 30, 60])
+            windows = config["rolling"].get(
+                "windows", [5, 10, 15, 20, 25, 30, 40, 50, 60]
+            )
             include = config["rolling"].get("include", None)
             exclude = config["rolling"].get("exclude", [])
             # `exclude` in dataset config unnecessary filed
