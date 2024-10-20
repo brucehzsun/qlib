@@ -26,6 +26,41 @@ from ...data.dataset import TSDatasetH
 from ...data.dataset.handler import DataHandlerLP
 from torch.utils.data import DataLoader
 from ...model.utils import ConcatDataset
+from typing import Callable, Union, List, Tuple, Dict, Text, Optional
+from ...data.dataset import TSDataSampler
+from datetime import date
+
+
+def filter_group_data(group_df: pd.DataFrame, data_arr: np.ndarray) -> Tuple[List[str], np.ndarray]:
+    group_data_list = []
+    instrument_list = []
+    nan_idx = len(data_arr) - 1
+    for instrument, instrument_index in group_df.items():
+        indices = np.nan_to_num(instrument_index.astype(
+            np.float64), nan=nan_idx).astype(int)
+        data = data_arr[indices[0]: indices[-1] + 1]
+        instrument_list.append(instrument)
+        group_data_list.append(data)
+    group_data = np.stack(group_data_list)
+    return instrument_list, group_data
+
+
+def create_data(dl_train: TSDataSampler, step_len: int) -> Dict[date, Tuple[List[str], np.ndarray]]:
+    print(len(dl_train.idx_df.index))
+    train_dict = {}
+    for idx in range(len(dl_train.idx_df.index)):
+        if idx < step_len:
+            continue
+        today = dl_train.idx_df.index[idx].date()
+        dates = dl_train.idx_df.index[max(idx - step_len + 1, 0): idx + 1]
+        group_df = dl_train.idx_df.loc[dates]
+        group_df = group_df.dropna(axis=1)
+        instruments, group_data = filter_group_data(
+            group_df, dl_train.data_arr)
+        train_dict[today] = (instruments, group_data)
+        print(
+            f"{type(today)}, {today}, instruments={len(instruments)}, data = {group_data.shape}")
+    return train_dict
 
 
 class DTML(Model):
