@@ -29,6 +29,7 @@ from ...model.utils import ConcatDataset
 from typing import Callable, Union, List, Tuple, Dict, Text, Optional
 from ...data.dataset import TSDataSampler
 from datetime import date
+from torch.utils.data import DataLoader, TensorDataset
 
 
 def filter_group_data(group_df: pd.DataFrame, data_arr: np.ndarray) -> Tuple[List[str], np.ndarray]:
@@ -38,9 +39,13 @@ def filter_group_data(group_df: pd.DataFrame, data_arr: np.ndarray) -> Tuple[Lis
     for instrument, instrument_index in group_df.items():
         indices = np.nan_to_num(instrument_index.astype(
             np.float64), nan=nan_idx).astype(int)
-        data = data_arr[indices[0]: indices[-1] + 1]
-        instrument_list.append(instrument)
-        group_data_list.append(data)
+        if (np.diff(indices) == 1).all():
+            data = data_arr[indices[0]: indices[-1] + 1]
+            instrument_list.append(instrument)
+            group_data_list.append(data)
+        else:
+            print(f"filter_group_data_error")
+            exit(-1)
     group_data = np.stack(group_data_list)
     return instrument_list, group_data
 
@@ -158,20 +163,31 @@ class DTML(Model):
 
         raise ValueError("unknown metric `%s`" % self.metric)
 
-    def train_epoch(self, data_loader):
+    def train_epoch(self, train_index_dict, train_dict):
         self.model.train()
 
-        for data, weight in data_loader:
-            feature = data[:, :, 0:-1].to(self.device)
-            label = data[:, -1, -1].to(self.device)
+        wl_train = np.ones(self.batch_size)
+        wl_valid = np.ones(self.batch_size)
 
-            pred = self.model(feature.float())
-            loss = self.loss_fn(pred, label, weight.to(self.device))
-
-            self.train_optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
-            self.train_optimizer.step()
+        total_date = len(train_dict)
+        for stock_date, (instruments, source) in train_dict.items():
+            index_code, index_source, index_target = train_index_dict[stock_date]
+            dataset = TensorDataset(source, wl_train)
+            dataloader = DataLoader(
+                dataset, self.batch_size, shuffle=True, drop_last=True)
+            for batch, (data, weight) in enumerate(dataloader):
+                feature = data[:, :, 0:-1].to(self.device)
+                label = data[:, -1, -1].to(self.device)
+                self.train_optimizer.zero_grad()
+                pred = self.model(index_source, feature)
+                loss = self.loss_fn(pred, label, weight.to(self.device))
+                # writer.add_scalar("Loss/train", loss, epoch)
+                loss.backward()
+                torch.nn.utils.clip_grad_value_(self.model.parameters(), 3.0)
+                self.train_optimizer.step()
+            # 2022-01-18, index_source=torch.Size([1, 10, 275]), source=torch.Size([299, 10, 275]), target=torch.Size([299, 1])
+            # print(
+            #     f"{stock_date}, index_source={index_source.shape}, source={source.shape}, target={target.shape}")
 
     def test_epoch(self, data_loader):
         self.model.eval()
@@ -196,48 +212,12 @@ class DTML(Model):
 
     def fit(
         self,
-        dataset: TSDatasetH,
+        train_index_dict:  Dict[date, Tuple[List[str], torch.Tensor, torch.Tensor]],
+        train_dict: Dict[date, Tuple[List[str], torch.Tensor, torch.Tensor]],
         evals_result=dict(),
         save_path=None,
         reweighter=None,
     ):
-        dl_train = dataset.prepare(
-            "train", col_set=["feature", "label"], data_key=DataHandlerLP.DK_L)
-        dl_valid = dataset.prepare(
-            "valid", col_set=["feature", "label"], data_key=DataHandlerLP.DK_L)
-        if dl_train.empty or dl_valid.empty:
-            raise ValueError(
-                "Empty data from dataset, please check your dataset config.")
-
-        # process nan brought by dataloader
-        dl_train.config(fillna_type="ffill+bfill")
-        # process nan brought by dataloader
-        dl_valid.config(fillna_type="ffill+bfill")
-
-        if reweighter is None:
-            wl_train = np.ones(len(dl_train))
-            wl_valid = np.ones(len(dl_valid))
-        elif isinstance(reweighter, Reweighter):
-            wl_train = reweighter.reweight(dl_train)
-            wl_valid = reweighter.reweight(dl_valid)
-        else:
-            raise ValueError("Unsupported reweighter type.")
-
-        train_loader = DataLoader(
-            ConcatDataset(dl_train, wl_train),
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=20,
-            drop_last=True,
-        )
-        valid_loader = DataLoader(
-            ConcatDataset(dl_valid, wl_valid),
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=20,
-            drop_last=True,
-        )
-
         save_path = get_or_create_path(save_path)
 
         stop_steps = 0
