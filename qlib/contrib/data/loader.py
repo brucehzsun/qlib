@@ -101,6 +101,35 @@ class Alpha158DL(QlibDataLoader):
         """
         fields = []
         names = []
+        if "dtml" in config:
+            fields += [
+                # "$open",
+                # "$high",
+                # "$low",
+                # "$close",
+                "$open/$close - 1",
+                "$high/$close - 1",
+                "$low/$close - 1",
+                "$close/Ref($close, 1) - 1"
+            ]
+            names += [
+                # "OPEN",
+                # "HIGH",
+                # "LOW",
+                # "CLOSE",
+                "ZOPEN",
+                "ZHIGH",
+                "ZLOW",
+                "ZCLOSE"
+            ]
+            windows = config["dtml"].get("windows", [5, 10, 15, 20, 25, 30])
+            feature = config["dtml"].get("feature", ["CLOSE"])
+            for field in feature:
+                field = field.lower()
+                fields += ["(Mean($%s, %d) - $close)/$close" % (field, d)
+                           if d != 0 else "$%s/$close-1" % field for d in windows]
+                names += [f"Z{field.upper()}_{str(d)}" for d in windows]
+
         if "kbar" in config:
             fields += [
                 "($close-$open)/$open",
@@ -126,14 +155,17 @@ class Alpha158DL(QlibDataLoader):
             ]
         if "price" in config:
             windows = config["price"].get("windows", range(5))
-            feature = config["price"].get("feature", ["OPEN", "HIGH", "LOW", "CLOSE", "VWAP"])
+            feature = config["price"].get(
+                "feature", ["OPEN", "HIGH", "LOW", "CLOSE", "VWAP"])
             for field in feature:
                 field = field.lower()
-                fields += ["Ref($%s, %d)/$close" % (field, d) if d != 0 else "$%s/$close" % field for d in windows]
+                fields += ["Ref($%s, %d)/$close" % (field, d) if d !=
+                           0 else "$%s/$close" % field for d in windows]
                 names += [field.upper() + str(d) for d in windows]
         if "volume" in config:
             windows = config["volume"].get("windows", range(5))
-            fields += ["Ref($volume, %d)/($volume+1e-12)" % d if d != 0 else "$volume/($volume+1e-12)" for d in windows]
+            fields += ["Ref($volume, %d)/($volume+1e-12)" % d if d !=
+                       0 else "$volume/($volume+1e-12)" for d in windows]
             names += ["VOLUME" + str(d) for d in windows]
         if "rolling" in config:
             windows = config["rolling"].get(
@@ -186,11 +218,13 @@ class Alpha158DL(QlibDataLoader):
             if use("QTLU"):
                 # The 80% quantile of past d day's close price, divided by latest close price to remove unit
                 # Used with MIN and MAX
-                fields += ["Quantile($close, %d, 0.8)/$close" % d for d in windows]
+                fields += ["Quantile($close, %d, 0.8)/$close" %
+                           d for d in windows]
                 names += ["QTLU%d" % d for d in windows]
             if use("QTLD"):
                 # The 20% quantile of past d day's close price, divided by latest close price to remove unit
-                fields += ["Quantile($close, %d, 0.2)/$close" % d for d in windows]
+                fields += ["Quantile($close, %d, 0.2)/$close" %
+                           d for d in windows]
                 names += ["QTLD%d" % d for d in windows]
             if use("RANK"):
                 # Get the percentile of current close price in past d day's close price.
@@ -199,7 +233,8 @@ class Alpha158DL(QlibDataLoader):
                 names += ["RANK%d" % d for d in windows]
             if use("RSV"):
                 # Represent the price position between upper and lower resistent price for past d days.
-                fields += ["($close-Min($low, %d))/(Max($high, %d)-Min($low, %d)+1e-12)" % (d, d, d) for d in windows]
+                fields += ["($close-Min($low, %d))/(Max($high, %d)-Min($low, %d)+1e-12)" %
+                           (d, d, d) for d in windows]
                 names += ["RSV%d" % d for d in windows]
             if use("IMAX"):
                 # The number of days between current date and previous highest price date.
@@ -218,27 +253,33 @@ class Alpha158DL(QlibDataLoader):
             if use("IMXD"):
                 # The time period between previous lowest-price date occur after highest price date.
                 # Large value suggest downward momemtum.
-                fields += ["(IdxMax($high, %d)-IdxMin($low, %d))/%d" % (d, d, d) for d in windows]
+                fields += ["(IdxMax($high, %d)-IdxMin($low, %d))/%d" %
+                           (d, d, d) for d in windows]
                 names += ["IMXD%d" % d for d in windows]
             if use("CORR"):
                 # The correlation between absolute close price and log scaled trading volume
-                fields += ["Corr($close, Log($volume+1), %d)" % d for d in windows]
+                fields += ["Corr($close, Log($volume+1), %d)" %
+                           d for d in windows]
                 names += ["CORR%d" % d for d in windows]
             if use("CORD"):
                 # The correlation between price change ratio and volume change ratio
-                fields += ["Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), %d)" % d for d in windows]
+                fields += ["Corr($close/Ref($close,1), Log($volume/Ref($volume, 1)+1), %d)" %
+                           d for d in windows]
                 names += ["CORD%d" % d for d in windows]
             if use("CNTP"):
                 # The percentage of days in past d days that price go up.
-                fields += ["Mean($close>Ref($close, 1), %d)" % d for d in windows]
+                fields += ["Mean($close>Ref($close, 1), %d)" %
+                           d for d in windows]
                 names += ["CNTP%d" % d for d in windows]
             if use("CNTN"):
                 # The percentage of days in past d days that price go down.
-                fields += ["Mean($close<Ref($close, 1), %d)" % d for d in windows]
+                fields += ["Mean($close<Ref($close, 1), %d)" %
+                           d for d in windows]
                 names += ["CNTN%d" % d for d in windows]
             if use("CNTD"):
                 # The diff between past up day and past down day
-                fields += ["Mean($close>Ref($close, 1), %d)-Mean($close<Ref($close, 1), %d)" % (d, d) for d in windows]
+                fields += ["Mean($close>Ref($close, 1), %d)-Mean($close<Ref($close, 1), %d)" %
+                           (d, d) for d in windows]
                 names += ["CNTD%d" % d for d in windows]
             if use("SUMP"):
                 # The total gain / the absolute total price changed
@@ -268,11 +309,13 @@ class Alpha158DL(QlibDataLoader):
                 names += ["SUMD%d" % d for d in windows]
             if use("VMA"):
                 # Simple Volume Moving average: https://www.barchart.com/education/technical-indicators/volume_moving_average
-                fields += ["Mean($volume, %d)/($volume+1e-12)" % d for d in windows]
+                fields += ["Mean($volume, %d)/($volume+1e-12)" %
+                           d for d in windows]
                 names += ["VMA%d" % d for d in windows]
             if use("VSTD"):
                 # The standard deviation for volume in past d days.
-                fields += ["Std($volume, %d)/($volume+1e-12)" % d for d in windows]
+                fields += ["Std($volume, %d)/($volume+1e-12)" %
+                           d for d in windows]
                 names += ["VSTD%d" % d for d in windows]
             if use("WVMA"):
                 # The volume weighted price change volatility

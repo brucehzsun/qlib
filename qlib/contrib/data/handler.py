@@ -60,8 +60,10 @@ class Alpha360(DataHandlerLP):
         inst_processors=None,
         **kwargs
     ):
-        infer_processors = check_transform_proc(infer_processors, fit_start_time, fit_end_time)
-        learn_processors = check_transform_proc(learn_processors, fit_start_time, fit_end_time)
+        infer_processors = check_transform_proc(
+            infer_processors, fit_start_time, fit_end_time)
+        learn_processors = check_transform_proc(
+            learn_processors, fit_start_time, fit_end_time)
 
         data_loader = {
             "class": "QlibDataLoader",
@@ -111,8 +113,10 @@ class Alpha158(DataHandlerLP):
         inst_processors=None,
         **kwargs
     ):
-        infer_processors = check_transform_proc(infer_processors, fit_start_time, fit_end_time)
-        learn_processors = check_transform_proc(learn_processors, fit_start_time, fit_end_time)
+        infer_processors = check_transform_proc(
+            infer_processors, fit_start_time, fit_end_time)
+        learn_processors = check_transform_proc(
+            learn_processors, fit_start_time, fit_end_time)
 
         data_loader = {
             "class": "QlibDataLoader",
@@ -205,12 +209,16 @@ class AlphaFaya(DataHandlerLP):
 
     def get_feature_config(self):
         conf = {
-            "kbar": {},
-            "price": {
-                "windows": [0],
-                "feature": ["OPEN", "HIGH", "LOW", "CLOSE", "VWAP"],
-            },
-            "rolling": {},
+            # "kbar": {},
+            # "price": {
+            #     "windows": [0],
+            #     "feature": ["OPEN", "HIGH", "LOW", "CLOSE", "VWAP"],
+            # },
+            # "rolling": {},
+            "dtml": {
+                "windows": [5, 10, 15, 20, 25, 30],
+                "feature": ["CLOSE"],
+            }
         }
         return Alpha158DL.get_feature_config(conf)
 
