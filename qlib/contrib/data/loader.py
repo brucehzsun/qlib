@@ -352,4 +352,7 @@ class Alpha158DL(QlibDataLoader):
                 ]
                 names += ["VSUMD%d" % d for d in windows]
 
+        for name, field in zip(names,fields):
+            print(f"factor : {name} => {field}")
+
         return fields, names
