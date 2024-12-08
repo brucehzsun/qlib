@@ -20,6 +20,7 @@ from ...model.base import Model
 from ...data.dataset.handler import DataHandlerLP
 from ...model.utils import ConcatDataset
 from ...data.dataset.weight import Reweighter
+from torch.utils.tensorboard import SummaryWriter
 
 
 class LSTM(Model):
@@ -195,10 +196,14 @@ class LSTM(Model):
     def fit(
         self,
         dataset,
+        exp_id:str,
+        recoder_id:str,
         evals_result=dict(),
         save_path=None,
         reweighter=None,
     ):
+        writer = SummaryWriter(log_dir=f"mlruns/{exp_id}/{recoder_id}/runs")
+
         dl_train = dataset.prepare("train", col_set=["feature", "label"], data_key=DataHandlerLP.DK_L)
         dl_valid = dataset.prepare("valid", col_set=["feature", "label"], data_key=DataHandlerLP.DK_L)
         if dl_train.empty or dl_valid.empty:
@@ -254,6 +259,8 @@ class LSTM(Model):
             self.logger.info("train %.6f, valid %.6f" % (train_score, val_score))
             evals_result["train"].append(train_score)
             evals_result["valid"].append(val_score)
+
+            writer.add_scalars("Loss", {"Train": train_loss, "Valid": val_loss}, step)
 
             if val_score > best_score:
                 best_score = val_score
