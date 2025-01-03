@@ -71,7 +71,7 @@ pip install -r requirements.txt
             > **due to the limitation of the *YahooFinance API*, only the last month's data is available in `1min`**
           - `region`: `CN` or `US` or `IN` or `BR`, by default `CN`
           - `delay`: `time.sleep(delay)`, by default *0.5*
-          - `start`: start datetime, by default *"2000-01-01"*; *closed interval(including start)*
+          - `start`: start datetime, by default *"2010-01-01"*; *closed interval(including start)*
           - `end`: end datetime, by default `pd.Timestamp(datetime.datetime.now() + pd.Timedelta(days=1))`; *open interval(excluding end)*
           - `max_workers`: get the number of concurrent symbols, it is not recommended to change this parameter in order to maintain the integrity of the symbol data, by default *1*
           - `check_data_length`: check the number of rows per *symbol*, by default `None`

@@ -267,7 +267,7 @@ class Run(BaseRun):
         interval: str
             freq, value from [1min, 1d], default 1d
         start: str
-            start datetime, default "2000-01-01"
+            start datetime, default "2010-01-01"
         end: str
             end datetime, default ``pd.Timestamp(datetime.datetime.now() + pd.Timedelta(days=1))``
         check_data_length: int # if this param useful?

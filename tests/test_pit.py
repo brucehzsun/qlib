@@ -51,7 +51,7 @@ class TestPIT(unittest.TestCase):
         # Run(
         #     source_dir=pit_dir,
         #     interval="quarterly",
-        # ).download_data(start="2000-01-01", end="2020-01-01", symbol_regex="^(600519|000725).*")
+        # ).download_data(start="2010-01-01", end="2020-01-01", symbol_regex="^(600519|000725).*")
         # bs.logout()
 
         Run(

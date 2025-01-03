@@ -16,12 +16,12 @@ pip install -r requirements.txt
 ```bash
 cd qlib/scripts/data_collector/pit/
 # download from baostock.com
-python collector.py download_data --source_dir ~/.qlib/stock_data/source/pit --start 2000-01-01 --end 2020-01-01 --interval quarterly
+python collector.py download_data --source_dir ~/.qlib/stock_data/source/pit --start 2010-01-01 --end 2020-01-01 --interval quarterly
 ```
 
 Downloading all data from the stock is very time-consuming. If you just want to run a quick test on a few stocks,  you can run the command below
 ```bash
-python collector.py download_data --source_dir ~/.qlib/stock_data/source/pit --start 2000-01-01 --end 2020-01-01 --interval quarterly --symbol_regex "^(600519|000725).*"
+python collector.py download_data --source_dir ~/.qlib/stock_data/source/pit --start 2010-01-01 --end 2020-01-01 --interval quarterly --symbol_regex "^(600519|000725).*"
 ```
 
 

@@ -21,7 +21,7 @@ class BaseCollector(abc.ABC):
     CACHE_FLAG = "CACHED"
     NORMAL_FLAG = "NORMAL"
 
-    DEFAULT_START_DATETIME_1D = pd.Timestamp("2000-01-01")
+    DEFAULT_START_DATETIME_1D = pd.Timestamp("2010-01-01")
     DEFAULT_START_DATETIME_1MIN = pd.Timestamp(datetime.datetime.now() - pd.Timedelta(days=5 * 6 - 1)).date()
     DEFAULT_END_DATETIME_1D = pd.Timestamp(datetime.datetime.now() + pd.Timedelta(days=1)).date()
     DEFAULT_END_DATETIME_1MIN = DEFAULT_END_DATETIME_1D
@@ -382,7 +382,7 @@ class BaseRun(abc.ABC):
         delay: float
             time.sleep(delay), default 0
         start: str
-            start datetime, default "2000-01-01"
+            start datetime, default "2010-01-01"
         end: str
             end datetime, default ``pd.Timestamp(datetime.datetime.now() + pd.Timedelta(days=1))``
         check_data_length: int

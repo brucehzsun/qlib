@@ -201,7 +201,7 @@ class NASDAQ100Index(WIKIIndex):
 class DJIAIndex(WIKIIndex):
     @property
     def bench_start_date(self) -> pd.Timestamp:
-        return pd.Timestamp("2000-01-01")
+        return pd.Timestamp("2010-01-01")
 
     def get_changes(self) -> pd.DataFrame:
         pass
@@ -256,7 +256,7 @@ class SP500Index(WIKIIndex):
 class SP400Index(WIKIIndex):
     @property
     def bench_start_date(self) -> pd.Timestamp:
-        return pd.Timestamp("2000-01-01")
+        return pd.Timestamp("2010-01-01")
 
     def get_changes(self) -> pd.DataFrame:
         pass

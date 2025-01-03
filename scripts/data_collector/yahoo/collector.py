@@ -774,7 +774,7 @@ class Run(BaseRun):
         delay: float
             time.sleep(delay), default 0.5
         start: str
-            start datetime, default "2000-01-01"; closed interval(including start)
+            start datetime, default "2010-01-01"; closed interval(including start)
         end: str
             end datetime, default ``pd.Timestamp(datetime.datetime.now() + pd.Timedelta(days=1))``; open interval(excluding end)
         check_data_length: int

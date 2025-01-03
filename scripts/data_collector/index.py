@@ -90,7 +90,7 @@ class IndexBase:
             pd.DataFrame:
 
                 symbol     start_date    end_date
-                SH600000   2000-01-01    2099-12-31
+                SH600000   2010-01-01    2099-12-31
 
             dtypes:
                 symbol: str

@@ -20,8 +20,8 @@ from data_collector.utils import get_hs_stock_symbols, get_calendar_list
 
 
 class PitCollector(BaseCollector):
-    DEFAULT_START_DATETIME_QUARTERLY = pd.Timestamp("2000-01-01")
-    DEFAULT_START_DATETIME_ANNUAL = pd.Timestamp("2000-01-01")
+    DEFAULT_START_DATETIME_QUARTERLY = pd.Timestamp("2010-01-01")
+    DEFAULT_START_DATETIME_ANNUAL = pd.Timestamp("2010-01-01")
     DEFAULT_END_DATETIME_QUARTERLY = pd.Timestamp(datetime.now() + pd.Timedelta(days=1))
     DEFAULT_END_DATETIME_ANNUAL = pd.Timestamp(datetime.now() + pd.Timedelta(days=1))
 
