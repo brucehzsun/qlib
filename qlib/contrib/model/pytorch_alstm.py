@@ -64,7 +64,7 @@ class ALSTM(Model):
         self.num_layers = num_layers
         self.dropout = dropout
         self.n_epochs = n_epochs
-        self.lr = lr
+        self.lr = float(lr)
         self.metric = metric
         self.batch_size = batch_size
         self.early_stop = early_stop
